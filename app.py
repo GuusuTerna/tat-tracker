@@ -606,3 +606,11 @@ if __name__ == '__main__':
     print("✅ Database initialized with default SLA configurations!")
     print("👉 Open http://localhost:5000")
     app.run(host='0.0.0.0', port=5000, debug=True)
+    
+    
+    
+if __name__ == '__main__':
+    # For PythonAnywhere, use waitress instead of debug server
+    from waitress import serve
+    serve(app, host='0.0.0.0', port=5000)    
+    
