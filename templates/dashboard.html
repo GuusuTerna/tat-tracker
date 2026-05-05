@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Alert Banner -->
+{% if alerts %}
+<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded">
+    <div class="flex items-center">
+        <i class="fas fa-exclamation-triangle text-red-500 mr-2"></i>
+        <p class="font-bold">{{ alerts|length }} case(s) need attention!</p>
+    </div>
+</div>
+{% endif %}
+
+<!-- Stats Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-lg shadow p-6">
+        <p class="text-gray-500">Total Cases</p>
+        <p class="text-2xl font-bold">{{ stats.total }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+        <p class="text-gray-500">In Progress</p>
+        <p class="text-2xl font-bold text-yellow-600">{{ stats.in_progress }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+        <p class="text-gray-500">On Time</p>
+        <p class="text-2xl font-bold text-green-600">{{ stats.on_time }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+        <p class="text-gray-500">Delayed</p>
+        <p class="text-2xl font-bold text-red-600">{{ stats.delayed }}</p>
+    </div>
+</div>
+
+<!-- Export Button -->
+<div class="mb-4">
+    <a href="/export/excel" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+        <i class="fas fa-file-excel"></i> Export to Excel
+    </a>
+    <button onclick="toggleBulkMode()" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 ml-2">
+        <i class="fas fa-check-double"></i> Bulk Actions
+    </button>
+    <a href="/sla_config" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 ml-2">
+        <i class="fas fa-sliders-h"></i> SLA Config
+    </a>
+    <a href="/audit_log" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 ml-2">
+        <i class="fas fa-history"></i> Audit Log
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="bg-white rounded-lg shadow mb-6 p-4">
+    <div class="flex flex-wrap gap-4">
+        <select onchange="applyFilter('dept', this.value)" class="px-3 py-1 border rounded">
+            <option value="">All Depts</option>
+            {% for dept in departments %}
+            <option value="{{ dept }}" {% if current_dept == dept %}selected{% endif %}>{{ dept }}</option>
+            {% endfor %}
+        </select>
+        
+        <select onchange="applyFilter('sla', this.value)" class="px-3 py-1 border rounded">
+            <option value="">All SLA</option>
+            {% for status in sla_statuses %}
+            <option value="{{ status }}" {% if current_sla == status %}selected{% endif %}>{{ status }}</option>
+            {% endfor %}
+        </select>
+        
+        <input type="text" id="search" placeholder="Search patient/case" value="{{ search }}" class="px-3 py-1 border rounded">
+        <button onclick="searchCases()" class="bg-blue-600 text-white px-4 py-1 rounded">Search</button>
+    </div>
+</div>
+
+<!-- Cases Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="min-w-full">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-4 py-3 text-left"><input type="checkbox" id="select-all" class="bulk-checkbox hidden"></th>
+                <th class="px-4 py-3 text-left">Case ID</th>
+                <th class="px-4 py-3 text-left">Patient</th>
+                <th class="px-4 py-3 text-left">Dept</th>
+                <th class="px-4 py-3 text-left">Test</th>
+                <th class="px-4 py-3 text-left">Status</th>
+                <th class="px-4 py-3 text-left">SLA</th>
+                <th class="px-4 py-3 text-left">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for case in cases %}
+            <tr class="border-t">
+                <td class="px-4 py-2"><input type="checkbox" class="case-select bulk-checkbox hidden" data-id="{{ case.id }}"></td>
+                <td class="px-4 py-2">{{ case.case_id }}</td>
+                <td class="px-4 py-2">{{ case.patient_name }}</td>
+                <td class="px-4 py-2">{{ case.department }}</td>
+                <td class="px-4 py-2">{{ case.test_name[:30] }}</td>
+                <td class="px-4 py-2">{{ case.status }}</td>
+                <td class="px-4 py-2">
+                    <span class="px-2 py-1 rounded text-white text-xs
+                        {% if case.sla_status == 'ON TIME' %}bg-green-500
+                        {% elif case.sla_status == 'NEAR DELAY' %}bg-yellow-500
+                        {% elif 'DELAYED' in case.sla_status %}bg-red-500
+                        {% else %}bg-gray-500{% endif %}">
+                        {{ case.sla_status or 'PENDING' }}
+                    </span>
+                </td>
+                <td class="px-4 py-2">
+                    <a href="/case/{{ case.id }}" class="text-blue-600">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Bulk Action Bar -->
+<div id="bulk-bar" class="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-4 hidden">
+    <div class="flex justify-between items-center">
+        <span id="selected-count">0</span> selected
+        <select id="bulk-phase" class="px-3 py-1 rounded text-black">
+            <option value="sample_collection">Sample Collection</option>
+            <option value="analysis">Analysis</option>
+            <option value="review">Review</option>
+        </select>
+        <button onclick="bulkAction('start_phase')" class="bg-blue-600 px-4 py-1 rounded">Start</button>
+        <button onclick="bulkAction('complete_phase')" class="bg-green-600 px-4 py-1 rounded">Complete</button>
+        <button onclick="toggleBulkMode()" class="bg-gray-600 px-4 py-1 rounded">Cancel</button>
+    </div>
+</div>
+
+<script>
+function applyFilter(param, value) {
+    const url = new URL(window.location.href);
+    if (value) url.searchParams.set(param, value);
+    else url.searchParams.delete(param);
+    window.location.href = url.toString();
+}
+
+function searchCases() {
+    const search = document.getElementById('search').value;
+    const url = new URL(window.location.href);
+    if (search) url.searchParams.set('search', search);
+    else url.searchParams.delete('search');
+    window.location.href = url.toString();
+}
+
+let bulkMode = false;
+function toggleBulkMode() {
+    bulkMode = !bulkMode;
+    const checkboxes = document.querySelectorAll('.bulk-checkbox');
+    const bar = document.getElementById('bulk-bar');
+    checkboxes.forEach(cb => cb.style.display = bulkMode ? 'inline-block' : 'none');
+    bar.style.display = bulkMode ? 'flex' : 'none';
+}
+
+function updateSelectedCount() {
+    document.getElementById('selected-count').textContent = document.querySelectorAll('.case-select:checked').length;
+}
+
+function bulkAction(action) {
+    const selected = Array.from(document.querySelectorAll('.case-select:checked')).map(cb => cb.dataset.id);
+    const phase = document.getElementById('bulk-phase').value;
+    
+    if (selected.length === 0) return alert('Select cases');
+    if (!phase) return alert('Select phase');
+    
+    fetch('/bulk_action', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({case_ids: selected, action: action, phase: phase})
+    }).then(() => location.reload());
+}
+
+document.querySelectorAll('.case-select').forEach(cb => cb.addEventListener('change', updateSelectedCount));
+document.getElementById('select-all')?.addEventListener('change', e => {
+    document.querySelectorAll('.case-select').forEach(cb => cb.checked = e.target.checked);
+    updateSelectedCount();
+});
+</script>
+{% endblock %}

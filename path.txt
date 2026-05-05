@@ -1,0 +1,19 @@
+tat_tracker/
+├── app.py
+├── models.py
+├── sla_config.py
+├── requirements.txt
+├── .env (create this yourself)
+├── init_db.py (run once to setup database)
+├── templates/
+│   ├── base.html
+│   ├── dashboard.html
+│   ├── new_case.html
+│   └── case_detail.html
+└── static/
+    └── js/
+        └── timer.js
+
+        maintenance logs
+        post and pre trip logs
+        travel logs

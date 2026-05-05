@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-2xl font-bold mb-6">SLA Configuration</h2>
+    <p class="text-gray-600 mb-4">Add new tests here - they will automatically appear in the "Create New Case" dropdown for their department.</p>
+    
+    <div class="mb-6">
+        <button onclick="showAddModal()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+            <i class="fas fa-plus"></i> Add New Test
+        </button>
+    </div>
+    
+    <!-- Display configs grouped by department -->
+    {% for dept in departments %}
+    <div class="mb-8">
+        <h3 class="text-lg font-semibold mb-3 bg-gray-100 p-2 rounded">{{ dept }} Department</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Test Name</th>
+                        <th class="px-4 py-2 text-left">SLA (Hours)</th>
+                        <th class="px-4 py-2 text-left">Status</th>
+                        <th class="px-4 py-2 text-left">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for config in configs if config.department == dept %}
+                    <tr class="border-t">
+                        <td class="px-4 py-2">{{ config.test_name }}</td>
+                        <td class="px-4 py-2">
+                            <input type="number" id="sla-{{ config.id }}" value="{{ config.sla_hours }}" step="0.5" class="w-24 px-2 py-1 border rounded">
+                        </td>
+                        <td class="px-4 py-2">
+                            <span class="px-2 py-1 rounded text-xs {% if config.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                {{ 'Active' if config.is_active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-2">
+                            <button onclick="updateSLA({{ config.id }}, '{{ config.test_name }}', '{{ config.department }}')" class="text-blue-600 mr-2 hover:text-blue-800">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                            <button onclick="toggleStatus({{ config.id }})" class="text-yellow-600 mr-2 hover:text-yellow-800">
+                                <i class="fas fa-toggle-{% if config.is_active %}on{% else %}off{% endif %}"></i>
+                            </button>
+                            <button onclick="deleteSLA({{ config.id }})" class="text-red-600 hover:text-red-800">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr class="border-t">
+                        <td colspan="4" class="px-4 py-2 text-gray-500 text-center">No custom tests added yet. Click "Add New Test" to create one.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Add Modal -->
+<div id="addModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 w-96">
+        <h3 class="text-lg font-bold mb-4">Add New Test</h3>
+        <div class="mb-3">
+            <label class="block text-sm font-medium mb-1">Test Name</label>
+            <input type="text" id="newTestName" class="w-full px-3 py-2 border rounded" placeholder="e.g., Radiology - Echocardiography">
+        </div>
+        <div class="mb-3">
+            <label class="block text-sm font-medium mb-1">Department</label>
+            <select id="newTestDept" class="w-full px-3 py-2 border rounded">
+                <option value="Lab">Lab</option>
+                <option value="Radiology">Radiology</option>
+                <option value="Mobile">Mobile</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="block text-sm font-medium mb-1">SLA (Hours)</label>
+            <input type="number" id="newTestSLA" step="0.5" class="w-full px-3 py-2 border rounded" placeholder="e.g., 2 for 2 hours">
+        </div>
+        <div class="flex justify-end gap-2 mt-4">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded">Cancel</button>
+            <button onclick="addNewTest()" class="px-4 py-2 bg-blue-600 text-white rounded">Add Test</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAddModal() {
+    document.getElementById('addModal').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('addModal').classList.add('hidden');
+    document.getElementById('newTestName').value = '';
+    document.getElementById('newTestSLA').value = '';
+}
+
+function addNewTest() {
+    const testName = document.getElementById('newTestName').value.trim();
+    const department = document.getElementById('newTestDept').value;
+    const slaHours = document.getElementById('newTestSLA').value;
+    
+    if (!testName) {
+        alert('Please enter a test name');
+        return;
+    }
+    if (!slaHours) {
+        alert('Please enter SLA hours');
+        return;
+    }
+    
+    fetch('/api/sla_config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            test_name: testName,
+            department: department,
+            sla_hours: parseFloat(slaHours)
+        })
+    }).then(response => response.json())
+      .then(data => {
+          if (data.success) {
+              alert(`Test "${testName}" added successfully! It will now appear in the ${department} department dropdown when creating new cases.`);
+              location.reload();
+          } else {
+              alert('Error adding test');
+          }
+      });
+}
+
+function updateSLA(id, testName, department) {
+    const slaHours = document.getElementById(`sla-${id}`).value;
+    fetch('/api/sla_config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            test_name: testName,
+            department: department,
+            sla_hours: parseFloat(slaHours)
+        })
+    }).then(() => location.reload());
+}
+
+function toggleStatus(id) {
+    fetch(`/api/sla_config/${id}/toggle`, {method: 'POST'})
+        .then(() => location.reload());
+}
+
+function deleteSLA(id) {
+    if (confirm('Delete this SLA rule? Cases using this test will use default SLA.')) {
+        fetch(`/api/sla_config/${id}`, {method: 'DELETE'})
+            .then(() => location.reload());
+    }
+}
+</script>
+{% endblock %}

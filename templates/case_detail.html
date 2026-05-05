@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow p-6">
+    <!-- Header -->
+    <div class="flex justify-between items-start mb-6 pb-4 border-b">
+        <div>
+            <h1 class="text-2xl font-bold">Case: {{ case.case_id }}</h1>
+            <p class="text-gray-600">Patient: {{ case.patient_name }}</p>
+            <p class="text-gray-600">Test: {{ case.test_name }}</p>
+            <p class="text-gray-600">Department: {{ case.department }}</p>
+        </div>
+        <div class="text-right">
+            <span class="px-3 py-1 rounded text-sm font-semibold text-white
+                {% if case.sla_status == 'ON TIME' %}bg-green-500
+                {% elif case.sla_status == 'NEAR DELAY' %}bg-yellow-500
+                {% elif 'DELAYED' in case.sla_status %}bg-red-500
+                {% else %}bg-gray-500{% endif %}">
+                {{ case.sla_status or 'PENDING' }}
+            </span>
+            {% if case.tat_hours %}
+            <p class="text-sm text-gray-600 mt-2">TAT: {{ case.tat_hours }} hours</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Phase Tracking -->
+    {% for phase_group, phase_list in phases.items() %}
+    <div class="mb-8">
+        <h2 class="text-xl font-semibold mb-4">{{ phase_group }}</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for phase in phase_list %}
+            {% set start_time = case[phase + '_start'] %}
+            {% set end_time = case[phase + '_end'] %}
+            {% set target = targets.get(phase, 30) %}
+            
+            <div class="border rounded-lg p-4">
+                <div class="flex justify-between items-start mb-2">
+                    <h3 class="font-semibold capitalize">{{ phase.replace('_', ' ') }}</h3>
+                    <span class="text-xs text-gray-500">Target: {{ target }} min</span>
+                </div>
+                
+                {% if start_time and end_time %}
+                    {% set duration = ((end_time - start_time).total_seconds() / 60) | round(1) %}
+                    <div class="text-green-600 mb-2">
+                        <i class="fas fa-check-circle"></i> Completed in {{ duration }} minutes
+                    </div>
+                    <div class="text-xs text-gray-500">
+                        Started: {{ start_time.strftime('%H:%M %d/%m') }}<br>
+                        Ended: {{ end_time.strftime('%H:%M %d/%m') }}
+                    </div>
+                {% elif start_time %}
+                    <div class="text-yellow-600 mb-2">
+                        <i class="fas fa-hourglass-half"></i> In Progress
+                    </div>
+                    <div class="text-xs text-gray-500 mb-2">
+                        Started: {{ start_time.strftime('%H:%M %d/%m') }}
+                    </div>
+                    <button onclick="endPhase('{{ phase }}')" 
+                            class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+                        <i class="fas fa-stop"></i> End Phase
+                    </button>
+                    <button onclick="manualDuration('{{ phase }}')" 
+                            class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700 ml-2">
+                        <i class="fas fa-edit"></i> Manual
+                    </button>
+                {% else %}
+                    <button onclick="startPhase('{{ phase }}')" 
+                            class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">
+                        <i class="fas fa-play"></i> Start Phase
+                    </button>
+                    <button onclick="manualDuration('{{ phase }}')" 
+                            class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700 ml-2">
+                        <i class="fas fa-edit"></i> Manual Entry
+                    </button>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    
+    <!-- Comments -->
+    <div class="mt-8 border-t pt-6">
+        <h2 class="text-xl font-semibold mb-4">Comments</h2>
+        <div class="mb-4">
+            <textarea id="new-comment" rows="2" class="w-full px-3 py-2 border rounded" placeholder="Add note..."></textarea>
+            <button onclick="addComment()" class="mt-2 bg-blue-600 text-white px-4 py-1 rounded">Add Comment</button>
+        </div>
+        {% for comment in comments %}
+        <div class="border-l-4 border-blue-500 pl-3 py-1 mb-2">
+            <div class="text-xs text-gray-500">{{ comment.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+            <div class="text-sm">{{ comment.comment }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Audit Log -->
+    <div class="mt-8 border-t pt-6">
+        <h2 class="text-xl font-semibold mb-4">Recent Activity</h2>
+        {% for audit in audits %}
+        <div class="text-sm border-b py-1">
+            <span class="text-gray-500 text-xs">{{ audit.created_at.strftime('%H:%M:%S') }}</span>
+            <span class="ml-2">{{ audit.action }}</span>
+            {% if audit.phase %} - {{ audit.phase }}{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+function startPhase(phase) {
+    fetch(`/api/start_phase/{{ case.id }}/${phase}`)
+        .then(r => r.json())
+        .then(d => { if(d.success) location.reload(); });
+}
+
+function endPhase(phase) {
+    fetch(`/api/end_phase/{{ case.id }}/${phase}`)
+        .then(r => r.json())
+        .then(d => { if(d.success) location.reload(); });
+}
+
+function manualDuration(phase) {
+    const minutes = prompt('Enter duration in minutes:');
+    if (minutes && !isNaN(minutes)) {
+        fetch(`/api/manual_duration/{{ case.id }}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({phase: phase, minutes: parseFloat(minutes)})
+        }).then(() => location.reload());
+    }
+}
+
+function addComment() {
+    const comment = document.getElementById('new-comment').value;
+    if (comment.trim()) {
+        fetch(`/api/add_comment/{{ case.id }}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({phase: 'general', comment: comment})
+        }).then(() => location.reload());
+    }
+}
+</script>
+{% endblock %}

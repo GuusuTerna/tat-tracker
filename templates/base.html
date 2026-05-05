@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAT Tracker - {% block title %}Dashboard{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .transition-all { transition: all 0.3s ease; }
+        .sla-on-time { background: #10b981; }
+        .sla-near-delay { background: #f59e0b; }
+        .sla-delayed { background: #ef4444; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-chart-line text-blue-600 text-2xl"></i>
+                    <h1 class="text-xl font-bold text-gray-800">Ronnie Diagnosics TAT Tracker</h1>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="/" class="text-gray-600 hover:text-blue-600 transition">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                    <a href="/new" class="text-gray-600 hover:text-blue-600 transition">
+                        <i class="fas fa-plus-circle"></i> New Case
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        // Socket connection for real-time updates
+        const socket = io();
+        socket.on('connect', function() {
+            console.log('Connected to TAT tracker');
+        });
+        socket.on('case_updated', function(data) {
+            console.log('Case updated:', data);
+            if (window.location.pathname.includes(`/case/${data.case_id}`)) {
+                location.reload();
+            } else if (window.location.pathname === '/' || window.location.pathname === '') {
+                location.reload();
+            }
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
